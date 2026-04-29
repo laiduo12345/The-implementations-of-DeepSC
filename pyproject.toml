@@ -1,0 +1,15 @@
+[project]
+name = "deepsc"
+version = "0.1.0"
+requires-python = ">=3.8,<3.9"
+dependencies = [
+  "tensorflow==2.3.4",
+  "keras==2.3.1",
+  "bert4keras==0.11.5",
+  "protobuf==3.20.3",
+  "numpy",
+  "w3lib",
+  "tqdm",
+  "nltk",
+  "scikit-learn",
+]

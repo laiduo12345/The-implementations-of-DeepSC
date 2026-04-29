@@ -1,10 +1,21 @@
 import json
 import tensorflow as tf
+from tqdm import tqdm
 from parameters import para_config
 from models.transceiver import Transeiver, Mine
 from dataset.dataloader import return_loader
 from utlis.trainer import train_step, eval_step
 from utlis.tools import SeqtoText, SNR_to_noise
+
+
+def _dataset_cardinality(ds):
+    try:
+        card = tf.data.experimental.cardinality(ds).numpy()
+    except Exception:
+        return None
+    if card < 0:
+        return None
+    return int(card)
 
 if __name__ == '__main__':
     # Set random seed
@@ -21,6 +32,8 @@ if __name__ == '__main__':
     StoT = SeqtoText(token_to_idx, args.end_idx)
     # Load dataset
     train_dataset, test_dataset = return_loader(args)
+    train_total = _dataset_cardinality(train_dataset)
+    test_total = _dataset_cardinality(test_dataset)
     # Build Model
     mine_net = Mine()
     net = Transeiver(args)
@@ -35,16 +48,29 @@ if __name__ == '__main__':
     for epoch in range(args.epochs):
         n_std = SNR_to_noise(args.train_snr)
         train_loss_record, test_loss_record = 0, 0
-        for (batch, (inp, tar)) in enumerate(train_dataset):
+        train_iter = tqdm(
+            train_dataset,
+            total=train_total,
+            desc=f"Epoch {epoch + 1}/{args.epochs} [train]",
+        )
+        for (batch, (inp, tar)) in enumerate(train_iter):
             train_loss, train_loss_mine, _ = train_step(inp, tar, net, mine_net, optim_net, optim_mi, args.channel, n_std,
                                             train_with_mine=args.train_with_mine)
             train_loss_record += train_loss
+            train_iter.set_postfix(loss=float(train_loss))
         train_loss_record = train_loss_record/batch
 
         # Valid
-        for (batch, (inp, tar)) in enumerate(test_dataset):
+        test_iter = tqdm(
+            test_dataset,
+            total=test_total,
+            desc=f"Epoch {epoch + 1}/{args.epochs} [test]",
+            leave=False,
+        )
+        for (batch, (inp, tar)) in enumerate(test_iter):
             test_loss = eval_step(inp, tar, net, args.channel, n_std)
             test_loss_record += test_loss
+            test_iter.set_postfix(loss=float(test_loss))
         test_loss_record = test_loss_record / batch
 
         if best_loss > test_loss_record:

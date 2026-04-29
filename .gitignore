@@ -1,5 +1,10 @@
 # Dataset artifacts
 /data/
+/outputs/
+/checkpoint/
+*.ckpt
+*.index
+*.data-*
 
 # Python cache
 __pycache__/

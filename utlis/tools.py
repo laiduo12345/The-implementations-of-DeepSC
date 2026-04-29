@@ -4,8 +4,17 @@ from w3lib.html import remove_tags
 from nltk.translate.bleu_score import sentence_bleu
 from sklearn.preprocessing import normalize
 from bert4keras.backend import keras
-from bert4keras.bert import build_bert_model
-from bert4keras.tokenizer import Tokenizer
+try:
+    from bert4keras.bert import build_bert_model
+except ImportError:
+    try:
+        from bert4keras.models import build_bert_model
+    except ImportError:
+        from bert4keras.models import build_transformer_model as build_bert_model
+try:
+    from bert4keras.tokenizer import Tokenizer
+except ImportError:
+    from bert4keras.tokenizers import Tokenizer
 
 class SeqtoText:
     def __init__(self, vocb_dictionary, end_idx):

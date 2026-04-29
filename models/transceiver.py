@@ -9,11 +9,13 @@ class Channels(tf.keras.Model):
 
     def awgn(self, inputs, n_std=0.1):
         x = inputs
+        n_std = tf.cast(n_std, x.dtype)
         y = x + tf.random.normal(tf.shape(x), mean=0.0, stddev=n_std)
         return y
 
     def fading(self, inputs, K=1, n_std=0.1, detector='MMSE'):
         x = inputs
+        n_std = tf.cast(n_std, x.dtype)
         bs, sent_len, d_model = x.shape
         mean = math.sqrt(K / (2 * (K + 1)))
         std = math.sqrt(1 / (2 * (K + 1)))
