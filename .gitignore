@@ -1,0 +1,10 @@
+# Dataset artifacts
+/data/
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Environment
+.venv/
+venv/
