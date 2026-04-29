@@ -146,7 +146,7 @@ python scripts\rq1_decode_snr.py `
   --checkpoint-dir outputs/rq1_massive/checkpoints/full `
   --output-dir outputs/rq1_massive/decoded/full `
   --channel AWGN `
-  --snrs=-6,-3,0,3,6,9,12 `
+  --snrs=-15,-12,-9,-6,-3,0,3,6,9,12 `
   --batch-size 256 `
   --seed 42 `
   --method full
@@ -159,7 +159,7 @@ python scripts\rq1_decode_snr.py `
   --checkpoint-dir outputs/rq1_massive/checkpoints/no_mi `
   --output-dir outputs/rq1_massive/decoded/no_mi `
   --channel AWGN `
-  --snrs=-6,-3,0,3,6,9,12 `
+  --snrs=-15,-12,-9,-6,-3,0,3,6,9,12 `
   --batch-size 256 `
   --seed 42 `
   --method no_mi

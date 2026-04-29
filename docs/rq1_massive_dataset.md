@@ -1,48 +1,30 @@
 # RQ1 数据集说明：Amazon MASSIVE
 
-## 1. 数据集概述
+## 1. 概述
 
-本项目在 RQ1（Task-level Semantic Preservation under Different SNRs）中引入 Amazon MASSIVE 数据集，作为任务型语义通信实验的主要真实数据来源。MASSIVE 是面向虚拟助手场景的多语言自然语言理解数据集，包含用户指令、意图标签和槽位标注。当前实验使用其中的英文 `en-US` 子集，并将其转换为本项目统一的 JSONL 格式。
+RQ1 对应 TODO 中“方向 5：加入任务级实验”，核心问题是：在不同信噪比（SNR）条件下，DeepSC 是否仍能保留完成任务所需的语义信息。与只比较接收句子和原句之间的 BLEU 分数不同，任务级实验更关心接收端是否还能识别用户意图、保留关键槽位，并据此完成原始任务。
 
-与前期模板数据相比，MASSIVE 的优势在于其表达形式更接近真实用户指令，覆盖更多任务域和意图类型，并提供官方 train/dev/test 划分。它能够更合理地评估 DeepSC 在不同信噪比条件下对任务级语义信息的保持能力。
+本项目选用 Amazon MASSIVE 英文子集作为 RQ1 的主要实验数据。MASSIVE 是面向虚拟助手场景的自然语言理解数据集，样本形式接近真实用户指令，每条数据通常包含一句用户 utterance、对应的 intent、可选 slot 标注以及所属 scenario。该数据结构天然适合将语义通信的评估对象从“句子是否逐词恢复”扩展到“任务语义是否保持”。
 
-## 2. 数据来源与导入方式
+在本研究中，MASSIVE 主要承担两类作用：一是提供比人工模板更真实、更丰富的任务型文本分布；二是提供 intent 与 slot 等任务标签，使实验能够计算 Intent Accuracy、Slot F1 和 Task Success Rate 等任务级指标，从而更直接地回答语义通信系统是否保留了完成任务所需的信息。
+
+## 2. 基本信息
 
 | 项目 | 内容 |
 |---|---|
 | 数据集名称 | Amazon MASSIVE |
-| 使用语言 | English, `en-US` |
+| 使用子集 | English, `en-US` |
 | 数据类型 | 单轮虚拟助手自然语言理解数据 |
-| 样本字段 | utterance, intent, slot annotation, scenario, partition |
-| 本项目导入脚本 | `scripts/rq1_import_massive.py` |
-| 本项目输出目录 | `data/rq1_massive/` |
-| 本项目统一格式 | `id`, `split`, `text`, `intent`, `slots`, `scenario`, `source` |
+| 主要语义单元 | 用户指令、意图、槽位、场景 |
+| 本项目用途 | RQ1 任务级语义保持实验 |
+| 本项目数据目录 | `data/rq1_massive/` |
+| 本项目统一字段 | `id`, `split`, `text`, `intent`, `slots`, `scenario`, `source` |
 
-导入命令示例：
+MASSIVE 的每条样本可以看作一次用户与虚拟助手的交互请求。例如，用户可能要求设置闹钟、查询天气、播放音乐、发送邮件、查询交通路线或获取事实性答案。对于语义通信实验而言，原始句子并不是唯一的评价目标；更重要的是接收端恢复文本后，系统是否仍能判断用户想做什么，以及关键实体、时间、地点、对象等信息是否被保留下来。
 
-```powershell
-.venv\Scripts\python.exe scripts\rq1_import_massive.py `
-  --download `
-  --locale en-US `
-  --output-dir data/rq1_massive `
-  --seed 42 `
-  --dedupe-text
-```
+## 3. 数据规模与划分
 
-导入后可直接接入 RQ1 pipeline：
-
-```powershell
-.venv\Scripts\python.exe scripts\rq1_run_pipeline.py `
-  --stage all `
-  --data-root data/rq1_massive `
-  --output-dir outputs/rq1_massive `
-  --snrs=-6,-3,0,3,6,9,12 `
-  --seed 42
-```
-
-## 3. 当前导入数据统计
-
-当前 `data/rq1_massive/` 已完成导入，统计结果如下。
+当前 RQ1 使用的 MASSIVE 英文数据已转换为本项目统一 JSONL 格式，总体规模如下。
 
 | 指标 | 数值 |
 |---|---:|
@@ -61,7 +43,7 @@
 | 90% 分位句长 | 约 11 words |
 | 无 slot 样本比例 | 约 32%-34% |
 
-### 3.1 数据划分
+该数据划分保留了训练、验证和测试集合，且当前导入版本中所有文本均唯一，测试集与训练集之间不存在精确文本重合。这一点对 RQ1 较为重要，因为它能减少模板数据中常见的 train/test 重复问题，降低模型依靠记忆固定句式而获得虚高任务指标的可能性。
 
 | Split | 样本数 | 句长中位数 | 平均句长 | 90% 分位句长 | 平均 Slot 数 | 无 Slot 比例 |
 |---|---:|---:|---:|---:|---:|---:|
@@ -69,22 +51,11 @@
 | Valid | 2,025 | 6 | 6.88 | 11 | 0.99 | 31.8% |
 | Test | 2,949 | 6 | 6.79 | 11 | 0.95 | 33.5% |
 
-### 3.2 Top Intent 分布
+从句长看，MASSIVE 英文子集多为短指令，符合虚拟助手交互的常见形式，也适合当前 DeepSC 模型的输入长度设置。从任务标签看，数据同时覆盖 intent 和 slot，使其不仅能用于文本恢复质量评估，还能用于任务完成情况评估。
 
-| Intent | 样本数 |
-|---|---:|
-| `calendar_set` | 1,146 |
-| `play_music` | 934 |
-| `weather_query` | 848 |
-| `general_quirky` | 825 |
-| `calendar_query` | 793 |
-| `qa_factoid` | 768 |
-| `news_query` | 707 |
-| `email_query` | 604 |
-| `email_sendemail` | 530 |
-| `datetime_query` | 493 |
+## 4. 任务域与意图分布
 
-### 3.3 Scenario 分布
+MASSIVE 覆盖 18 个虚拟助手场景，能够支撑较广泛的任务型语义通信分析。当前数据中的 scenario 分布如下。
 
 | Scenario | 样本数 |
 |---|---:|
@@ -107,7 +78,30 @@
 | `takeaway` | 355 |
 | `cooking` | 322 |
 
-### 3.4 高频 Slot 类型
+这些场景涵盖日历、播放、问答、邮件、智能家居、天气、交通、新闻、推荐、闹钟、烹饪等常见任务。它们比少量人工模板更能体现真实任务型文本的多样性，因此适合作为 RQ1 主实验数据。
+
+在 intent 层面，当前数据包含 60 类意图。高频意图示例如下。
+
+| Intent | 样本数 |
+|---|---:|
+| `calendar_set` | 1,146 |
+| `play_music` | 934 |
+| `weather_query` | 848 |
+| `general_quirky` | 825 |
+| `calendar_query` | 793 |
+| `qa_factoid` | 768 |
+| `news_query` | 707 |
+| `email_query` | 604 |
+| `email_sendemail` | 530 |
+| `datetime_query` | 493 |
+
+Intent 标签用于判断接收端恢复文本是否仍表达了同一任务意图。例如，原始指令是查询天气，恢复结果只要仍能被识别为天气查询，就说明任务层面的核心语义被部分保留；反之，即使恢复句子与原句在若干词上相似，但意图变成播放音乐或设置闹钟，也应视为任务语义失败。
+
+## 5. 槽位信息
+
+Slot 是任务型语义中更细粒度的关键信息，通常对应时间、地点、人物、事件、媒体类型、食物类型等实体或属性。对于语义通信而言，slot 的保留尤其重要，因为很多任务只有在关键槽位正确时才算真正完成。例如，“明天上午九点叫醒我”中，`time` 与 `date` 错误会直接导致闹钟任务失败；“播放某位歌手的歌曲”中，`artist_name` 错误会导致播放对象错误。
+
+当前数据包含 55 类 slot，高频 slot 类型如下。
 
 | Slot 类型 | 出现次数 |
 |---|---:|
@@ -122,7 +116,9 @@
 | `transport_type` | 432 |
 | `food_type` | 413 |
 
-## 4. 数据样例
+Slot 指标可以弥补 BLEU 的不足。BLEU 更关注词序和 n-gram 重合，但任务型指令中有些词对任务成败非常关键，有些词则只是表达方式。例如，将 “Friday” 恢复为 “Monday” 可能只改变一个词，却会导致任务失败；而将 “please play music” 改写为 “play some music” 虽然字面不同，但任务语义基本保持。因此，slot 保留情况能更直接反映接收端是否保存了任务所需的关键变量。
+
+## 6. 样本示例
 
 | Scenario | Intent | Text | Slots |
 |---|---|---|---|
@@ -133,97 +129,67 @@
 | recommendation | `recommendation_locations` | `find me a nice restaurant for dinner` | `business_type=restaurant`, `meal_type=dinner` |
 | transport | `transport_query` | `you need to give me different directions` | none |
 
-## 5. 数据流与实验位置
+这些样例展示了 MASSIVE 对任务语义的显式建模方式。每条文本都可以同时从自然语言恢复质量、意图保持情况和槽位保持情况三个角度进行评价。其中，部分样本没有 slot，这类样本仍可用于 intent 评估，但对 slot 指标不产生直接贡献。
 
-```mermaid
-flowchart LR
-    A[Amazon MASSIVE en-US] --> B[rq1_import_massive.py]
-    B --> C[data/rq1_massive/*.jsonl]
-    C --> D[rq1_convert_data.py]
-    D --> E[DeepSC pickle + vocab]
-    E --> F[rq1_train_deepsc.py]
-    F --> G[full / no_mi checkpoints]
-    G --> H[rq1_decode_snr.py]
-    H --> I[decoded JSONL by SNR]
-    I --> J[rq1_evaluate_task_metrics.py]
-    J --> K[BLEU / Intent / Slot / Task Success]
-```
+## 7. 在 RQ1 中的作用
 
-## 6. 与 RQ1 的适配性分析
+RQ1 关注不同 SNR 下的任务级语义保持能力。MASSIVE 在该问题中的作用可以概括为以下几点。
 
-MASSIVE 适合作为 RQ1 主实验数据集，原因如下。
+第一，MASSIVE 将实验对象从通用句子恢复扩展为任务型语义恢复。原始 DeepSC 评估常侧重 BLEU 等文本相似度指标，而 MASSIVE 提供的 intent 与 slot 标签使实验能够进一步观察接收文本是否仍支持正确任务决策。
 
-1. **任务级语义标签完整**  
-   每条样本包含自然语言指令、意图标签和槽位标注，能够直接支持 Intent Accuracy、Slot Recall、Slot F1 和 Task Success Rate 等任务级指标。
+第二，MASSIVE 提供了更接近真实应用的指令分布。与人工模板相比，它包含更多任务域、更多表达方式和更多实体类型，能更好地检验模型在非模板化任务上的泛化表现。
 
-2. **任务域覆盖广泛**  
-   数据覆盖 18 个 scenario 和 60 个 intent，包括 alarm、calendar、weather、music、transport、email、iot、qa 等常见虚拟助手任务。相比人工模板数据，其任务语义空间更大。
+第三，MASSIVE 能支持对噪声影响的分层分析。随着 SNR 降低，接收文本可能先出现局部词错误，再进一步破坏实体、意图甚至整体任务。通过同时观察 BLEU、Intent Accuracy、Slot F1 和 Task Success Rate，可以分析 DeepSC 在不同噪声强度下丢失的是表层文本、关键槽位还是整体任务意图。
 
-3. **减少模板重复导致的虚高指标**  
-   当前导入版本中，所有文本均唯一，且 test 与 train 没有精确文本重合。该性质能够缓解前期模板数据中 train/test 大量重复导致的 SNR=0 条件下指标异常偏高问题。
+第四，MASSIVE 有助于突出语义通信的最终目标。对于任务型通信系统而言，接收端不一定需要逐词恢复原句，但必须保留能驱动任务执行的语义要素。因此，该数据集能更好地支撑论文中“任务完成优先于字面一致”的论证。
 
-4. **槽位保留评估更有意义**  
-   数据包含 55 类 slot，且 test split 中存在部分 train 未见过的 slot value。因此，模型不仅需要恢复句式，还需要在噪声信道下尽量保持关键实体、时间、地点、对象等槽位信息。
+## 8. 指标解释
 
-5. **句长适合当前 DeepSC 结构**  
-   MASSIVE 英文子集大多数句子长度在 5-11 words 范围内，符合当前 DeepSC 默认最大长度和训练设置，工程接入成本较低。
+在 RQ1 中，MASSIVE 可支持以下几类指标。
 
-## 7. 局限性与实验注意事项
+| 指标 | 含义 | 评价重点 |
+|---|---|---|
+| BLEU | 接收文本与原始文本的 n-gram 重合程度 | 表层文本恢复质量 |
+| Intent Accuracy | 接收文本是否仍对应正确意图 | 任务类型是否保持 |
+| Slot Precision/Recall/F1 | 接收文本是否保留关键槽位值 | 实体、时间、地点、对象等变量是否保持 |
+| Task Success Rate | 意图正确且关键槽位均被保留 | 任务是否可被正确完成 |
 
-尽管 MASSIVE 明显优于模板数据，但在论文实验设计中仍需客观说明以下限制。
+这些指标之间具有互补关系。BLEU 可以反映句子层面的整体退化趋势，但不能充分说明任务是否失败；Intent Accuracy 可以反映任务类别是否保持，但不一定检查具体参数；Slot F1 可以衡量关键变量是否被保留；Task Success Rate 则将 intent 和 slot 结合起来，用于估计端到端任务完成情况。
+
+因此，在论文和汇报中，建议将 BLEU 作为传统文本恢复指标，将 Intent Accuracy、Slot F1 和 Task Success Rate 作为 RQ1 的核心任务级指标。这样可以更清楚地展示：在不同信道条件下，DeepSC 保留的不只是词面相似度，而是对实际任务有用的语义信息。
+
+## 9. 相比模板数据的优势
+
+前期模板数据适合验证 pipeline 是否可运行，但其样本生成规则固定，表达模式有限，且容易出现训练集和测试集之间的句式重复。在这种情况下，模型可能通过记忆模板获得较高指标，难以充分说明其在真实任务指令上的语义保持能力。
+
+MASSIVE 相比模板数据具有三点优势。首先，它的文本来自更真实的虚拟助手任务场景，表达形式更丰富。其次，它覆盖 18 个 scenario、60 个 intent 和 55 类 slot，任务空间明显更大。最后，当前导入版本中测试文本与训练文本没有精确重合，更有利于观察模型在未见表达上的任务级语义保留情况。
+
+因此，在论文中可将模板数据定位为方法验证或流程检查，将 MASSIVE 定位为 RQ1 的主要实验数据集。
+
+## 10. 局限性
+
+尽管 MASSIVE 适合 RQ1，但仍需在论文中客观说明其限制。
 
 | 限制 | 说明 | 可能影响 |
 |---|---|---|
 | 单轮任务数据 | MASSIVE 主要是单轮虚拟助手指令 | 不覆盖多轮上下文语义保持 |
-| 句子整体较短 | 中位数约 6 words | 对长句语义通信能力考察不足 |
-| 约三分之一样本无 slot | audio、general、transport 等场景中存在无槽位样本 | Slot 指标对部分样本不敏感 |
-| Intent 评估当前为启发式 | 本项目对非模板 intent 使用 nearest-original-utterance fallback | Intent Accuracy 是 proxy，不等同于独立 NLU 分类器结果 |
-| Slot 匹配为字符串级别 | 当前只做规范化字符串匹配 | 无法识别同义表达或数字形式变体 |
+| 句子整体较短 | 中位数约 6 words | 对长句和复杂篇章语义通信能力考察不足 |
+| 部分样本无 slot | 约三分之一左右样本没有槽位标注 | Slot 指标无法覆盖所有样本 |
+| Intent 评估依赖启发式方法 | 当前项目对非模板 intent 使用近邻原句等规则近似判断 | Intent Accuracy 是任务语义 proxy，不等同于独立 NLU 分类器输出 |
+| Slot 匹配为字符串级别 | 当前主要依赖规范化字符串匹配 | 难以处理同义表达、数字形式变化或复杂改写 |
 
-## 8. 建议的实验设置
+这些限制并不影响 MASSIVE 作为 RQ1 主数据集的合理性，但需要在论文实验局限性中说明。更严谨的后续扩展可以引入独立训练的 NLU 模型作为语义判别器，或加入多轮对话、长文本任务和更复杂的语义等价判断。
 
-### 8.1 主实验：全量 MASSIVE
+## 11. 论文与汇报表述建议
 
-主实验建议使用全部导入样本，以评估 DeepSC 在真实任务型指令分布上的整体语义保持能力。
+可在论文数据集部分使用如下表述：
 
-```powershell
-.venv\Scripts\python.exe scripts\rq1_run_pipeline.py `
-  --stage all `
-  --data-root data/rq1_massive `
-  --output-dir outputs/rq1_massive `
-  --snrs=-6,-3,0,3,6,9,12 `
-  --seed 42
-```
+> 本文采用 Amazon MASSIVE 英文子集构造任务型语义通信评估集。该数据集面向虚拟助手自然语言理解场景，包含用户指令、意图标签、槽位标注和任务场景信息。相比仅使用 BLEU 衡量句子级恢复质量，MASSIVE 允许本文进一步评估不同 SNR 条件下 intent、slot 与 task success 的保持情况，从而更直接地衡量通信系统对任务级语义信息的保真能力。
 
-### 8.2 Slot-focused 实验：仅保留有 slot 的样本
+可在 RQ1 实验动机中使用如下表述：
 
-为了更集中评估槽位实体的保持能力，可构造 `min_slots >= 1` 的子集。
+> 语义通信的最终目标并非逐词复原原始句子，而是在接收端保留足以完成任务的关键信息。因此，本文在 RQ1 中引入任务型数据集 MASSIVE，将评估重点从文本相似度扩展到任务意图和槽位实体的保持情况，以分析 DeepSC 在不同信道噪声下的任务级语义鲁棒性。
 
-```powershell
-.venv\Scripts\python.exe scripts\rq1_import_massive.py `
-  --source data\raw\massive\amazon-massive-dataset-1.1.tar.gz `
-  --output-dir data/rq1_massive_slots `
-  --min-slots 1 `
-  --seed 42
-```
+可在局限性部分使用如下表述：
 
-对应 pipeline：
-
-```powershell
-.venv\Scripts\python.exe scripts\rq1_run_pipeline.py `
-  --stage all `
-  --data-root data/rq1_massive_slots `
-  --output-dir outputs/rq1_massive_slots `
-  --snrs=-6,-3,0,3,6,9,12 `
-  --seed 42
-```
-
-## 9. 论文写作建议
-
-在论文中，建议将当前模板数据定位为 pipeline sanity check，而将 MASSIVE 定位为 RQ1 的主要实验数据集。相关表述应避免声称 MASSIVE 能覆盖全部自然语言语义通信场景，更准确的说法是：
-
-> 本文采用 Amazon MASSIVE 英文子集构造任务型语义通信评估集。该数据集覆盖多个虚拟助手任务域，并提供 intent 与 slot 标注，适合评估通信系统在不同信道条件下对任务级语义信息的保持能力。
-
-同时，建议在实验局限性中说明：
-
-> 当前任务成功率基于规则与字符串匹配实现，反映的是可解释的任务语义保留情况；后续工作可引入独立训练的 NLU 模型作为语义判别器，以进一步提升评估指标的鲁棒性。
+> 当前任务成功率基于规则和字符串匹配实现，反映的是一种可解释的任务语义保留近似度。该设置适合分析 intent 与 slot 在噪声信道下的变化趋势，但尚不能完全替代独立 NLU 模型或人工语义等价判断。后续工作可引入训练好的语义判别器，以提升任务级评估的鲁棒性。
