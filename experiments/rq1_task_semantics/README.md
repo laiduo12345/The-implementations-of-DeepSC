@@ -48,14 +48,12 @@ Quick test settings:
 ## Full Pipeline
 
 ```powershell
-.venv\Scripts\python.exe scripts\rq1_run_pipeline.py `
-  --stage all `
-  --snrs 0,3,6,9,12,15,18 `
-  --output-dir outputs/rq1_task_semantics `
-  --seed 42
+.venv\Scripts\python.exe scripts\rq1_run_pipeline.py   --stage all   --snrs 0,3,6,9,12,15,18   --output-dir outputs/rq1_task_semantics   --seed 42
 ```
 
 Use `--skip-train` when checkpoints already exist and only decode/evaluate/plot stages are needed.
+
+`rq1_run_pipeline.py` shows a progress bar for pipeline substeps. Add `--no-progress` when plain logs are preferred. TensorFlow C++ INFO/WARNING logs are hidden by default with `--tf-log-level 2`; use `--tf-log-level 0` to see all TensorFlow runtime messages.
 
 ## Staged Commands
 

@@ -1,7 +1,10 @@
 """CLI entrypoint for RQ1 DeepSC training."""
 
+import os
 import sys
 from pathlib import Path
+
+os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "2")
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:

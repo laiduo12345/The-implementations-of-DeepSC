@@ -1,8 +1,11 @@
 """Decode RQ1 test samples across SNR values."""
 
 import argparse
+import os
 from pathlib import Path
 from typing import Any, Dict, List
+
+os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "2")
 
 import tensorflow as tf
 
