@@ -87,23 +87,23 @@ Use `--skip-train` when checkpoints already exist and only decode/evaluate/plot 
 
 ## Staged Commands
 
-Generate template data:
+Import Amazon MASSIVE data:
 
 ```powershell
-python scripts\rq1_generate_data.py `
-  --output-dir data/rq1_task_semantics `
-  --train-size 8000 `
-  --valid-size 1000 `
-  --test-size 1000 `
-  --seed 42
+python scripts\rq1_import_massive.py `
+  --download `
+  --locale en-US `
+  --output-dir data/rq1_massive `
+  --seed 42 `
+  --dedupe-text
 ```
 
 Convert to DeepSC format:
 
 ```powershell
 python scripts\rq1_convert_data.py `
-  --input-dir data/rq1_task_semantics `
-  --output-dir data/rq1_task_semantics/deepsc_format `
+  --input-dir data/rq1_massive `
+  --output-dir data/rq1_massive/deepsc_format `
   --seed 42
 ```
 
@@ -111,9 +111,9 @@ Train the full model with MI loss:
 
 ```powershell
 python scripts\rq1_train_deepsc.py `
-  --data-dir data/rq1_task_semantics/deepsc_format `
-  --checkpoint-dir outputs/rq1_task_semantics/checkpoints/full `
-  --log-dir outputs/rq1_task_semantics/logs/train_full `
+  --data-dir data/rq1_massive/deepsc_format `
+  --checkpoint-dir outputs/rq1_massive/checkpoints/full `
+  --log-dir outputs/rq1_massive/logs/train_full `
   --channel AWGN `
   --train-snr 6 `
   --batch-size 64 `
@@ -126,9 +126,9 @@ Train the no-MI control:
 
 ```powershell
 python scripts\rq1_train_deepsc.py `
-  --data-dir data/rq1_task_semantics/deepsc_format `
-  --checkpoint-dir outputs/rq1_task_semantics/checkpoints/no_mi `
-  --log-dir outputs/rq1_task_semantics/logs/train_no_mi `
+  --data-dir data/rq1_massive/deepsc_format `
+  --checkpoint-dir outputs/rq1_massive/checkpoints/no_mi `
+  --log-dir outputs/rq1_massive/logs/train_no_mi `
   --channel AWGN `
   --train-snr 6 `
   --batch-size 64 `
@@ -137,35 +137,49 @@ python scripts\rq1_train_deepsc.py `
   --no-train-with-mine
 ```
 
-Decode one method across SNRs:
+Decode both methods across SNRs:
 
 ```powershell
 python scripts\rq1_decode_snr.py `
-  --data-dir data/rq1_task_semantics/deepsc_format `
-  --test-jsonl data/rq1_task_semantics/test.jsonl `
-  --checkpoint-dir outputs/rq1_task_semantics/checkpoints/full `
-  --output-dir outputs/rq1_task_semantics/decoded/full `
+  --data-dir data/rq1_massive/deepsc_format `
+  --test-jsonl data/rq1_massive/test.jsonl `
+  --checkpoint-dir outputs/rq1_massive/checkpoints/full `
+  --output-dir outputs/rq1_massive/decoded/full `
   --channel AWGN `
-  --snrs 0,3,6,9,12,15,18 `
+  --snrs=-6,-3,0,3,6,9,12 `
   --batch-size 256 `
   --seed 42 `
   --method full
+```
+
+```powershell
+python scripts\rq1_decode_snr.py `
+  --data-dir data/rq1_massive/deepsc_format `
+  --test-jsonl data/rq1_massive/test.jsonl `
+  --checkpoint-dir outputs/rq1_massive/checkpoints/no_mi `
+  --output-dir outputs/rq1_massive/decoded/no_mi `
+  --channel AWGN `
+  --snrs=-6,-3,0,3,6,9,12 `
+  --batch-size 256 `
+  --seed 42 `
+  --method no_mi
 ```
 
 Evaluate decoded JSONL files:
 
 ```powershell
 python scripts\rq1_evaluate_task_metrics.py `
-  --decoded-dir outputs/rq1_task_semantics/decoded `
-  --output-dir outputs/rq1_task_semantics/metrics
+  --decoded-dir outputs/rq1_massive/decoded `
+  --output-dir outputs/rq1_massive/metrics `
+  --metadata-json data/rq1_massive/deepsc_format/metadata.json
 ```
 
 Plot figures:
 
 ```powershell
 python scripts\rq1_plot_results.py `
-  --summary-csv outputs/rq1_task_semantics/metrics/rq1_summary.csv `
-  --output-dir outputs/rq1_task_semantics/figures
+  --summary-csv outputs/rq1_massive/metrics/rq1_summary.csv `
+  --output-dir outputs/rq1_massive/figures
 ```
 
 ## Outputs

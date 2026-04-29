@@ -50,6 +50,7 @@ def write_json(path: Path, value: Dict[str, Any]) -> None:
 
 def set_global_seed(seed: int) -> None:
     """Seed Python, NumPy, and TensorFlow if TensorFlow is imported."""
+    seed = int(seed) % (2**32)
     random.seed(seed)
     np.random.seed(seed)
     os.environ.setdefault("PYTHONHASHSEED", str(seed))

@@ -36,7 +36,7 @@
   --stage all `
   --data-root data/rq1_massive `
   --output-dir outputs/rq1_massive `
-  --snrs -6,-3,0,3,6,9,12 `
+  --snrs=-6,-3,0,3,6,9,12 `
   --seed 42
 ```
 
@@ -191,7 +191,7 @@ MASSIVE 适合作为 RQ1 主实验数据集，原因如下。
   --stage all `
   --data-root data/rq1_massive `
   --output-dir outputs/rq1_massive `
-  --snrs -6,-3,0,3,6,9,12 `
+  --snrs=-6,-3,0,3,6,9,12 `
   --seed 42
 ```
 
@@ -214,7 +214,7 @@ MASSIVE 适合作为 RQ1 主实验数据集，原因如下。
   --stage all `
   --data-root data/rq1_massive_slots `
   --output-dir outputs/rq1_massive_slots `
-  --snrs -6,-3,0,3,6,9,12 `
+  --snrs=-6,-3,0,3,6,9,12 `
   --seed 42
 ```
 
