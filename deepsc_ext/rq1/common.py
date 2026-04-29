@@ -18,7 +18,7 @@ def ensure_dir(path: Path) -> Path:
 def read_jsonl(path: Path) -> List[Dict[str, Any]]:
     """Read a UTF-8 JSONL file."""
     rows = []
-    with path.open("r", encoding="utf-8") as handle:
+    with path.open("r", encoding="utf-8-sig") as handle:
         for line in handle:
             line = line.strip()
             if line:
@@ -36,7 +36,7 @@ def write_jsonl(path: Path, rows: Iterable[Dict[str, Any]]) -> None:
 
 def read_json(path: Path) -> Dict[str, Any]:
     """Read a UTF-8 JSON file."""
-    with path.open("r", encoding="utf-8") as handle:
+    with path.open("r", encoding="utf-8-sig") as handle:
         return json.load(handle)
 
 

@@ -3,12 +3,13 @@
 import argparse
 import json
 import pickle
+from collections import defaultdict
 from pathlib import Path
 from statistics import mean
 from typing import Any, Dict, Iterable, List
 
 from dataset.preprocess_text import SPECIAL_TOKENS, build_vocab, normalize_string, tokenize
-from deepsc_ext.rq1.common import ensure_dir, read_jsonl, write_json
+from deepsc_ext.rq1.common import ensure_dir, read_json, read_jsonl, write_json
 from deepsc_ext.rq1.data import candidate_values_by_slot
 
 
@@ -51,6 +52,36 @@ def _length_summary(encoded_splits: Dict[str, List[List[int]]]) -> Dict[str, flo
     }
 
 
+def _derive_task_metadata(rows: Dict[str, List[Dict[str, Any]]], input_dir: Path) -> Dict[str, Any]:
+    """Derive slot and intent metadata from RQ1 JSONL rows."""
+    values_by_slot = defaultdict(set)
+    intent_slot_names = defaultdict(set)
+    for split_rows in rows.values():
+        for row in split_rows:
+            intent = row.get("intent", "unknown")
+            for slot_name, value in row.get("slots", {}).items():
+                base_slot = slot_name.split("__", 1)[0]
+                values_by_slot[base_slot].add(value)
+                intent_slot_names[intent].add(base_slot)
+
+    source_metadata_path = input_dir / "metadata.json"
+    source_metadata = read_json(source_metadata_path) if source_metadata_path.exists() else {}
+    if values_by_slot:
+        candidate_values = {
+            slot: sorted(values) for slot, values in sorted(values_by_slot.items())
+        }
+    else:
+        candidate_values = source_metadata.get("candidate_values_by_slot") or candidate_values_by_slot()
+
+    return {
+        "candidate_values_by_slot": candidate_values,
+        "intent_slot_names": {
+            intent: sorted(slot_names) for intent, slot_names in sorted(intent_slot_names.items())
+        },
+        "source_metadata": source_metadata,
+    }
+
+
 def convert_jsonl_to_deepsc(
     input_dir: Path,
     output_dir: Path,
@@ -89,9 +120,9 @@ def convert_jsonl_to_deepsc(
         "vocab_size": len(token_to_idx),
         "seed": seed,
         "source_jsonl_paths": {split: str(path) for split, path in split_paths.items()},
-        "candidate_values_by_slot": candidate_values_by_slot(),
     }
     metadata.update(lengths)
+    metadata.update(_derive_task_metadata(rows, input_dir))
     write_json(output_dir / "metadata.json", metadata)
     return metadata
 

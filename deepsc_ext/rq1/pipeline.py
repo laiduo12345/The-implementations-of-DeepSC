@@ -237,6 +237,8 @@ def _build_steps(args: argparse.Namespace, stages: List[str], data_dir: Path, sn
                     str(args.output_dir / "decoded"),
                     "--output-dir",
                     str(args.output_dir / "metrics"),
+                    "--metadata-json",
+                    str(data_dir / "metadata.json"),
                 ],
             )
         )

@@ -9,7 +9,7 @@ The pipeline generates template task data, converts it to the repository's DeepS
 Use the repository Python 3.8 environment or another environment compatible with TensorFlow 2.3.x. In this checkout, the working interpreter is:
 
 ```powershell
-.venv\Scripts\python.exe
+python
 ```
 
 The global Python 3.13 environment is not compatible with this repository's legacy Keras stack.
@@ -31,12 +31,42 @@ Supported intents:
 
 DeepSC format outputs are pickle lists of token id sequences plus `vocab.json` with the original `{"token_to_idx": ...}` format.
 
+## Amazon MASSIVE Import
+
+For a larger and more realistic task dataset, import Amazon MASSIVE English data into the same RQ1 JSONL schema:
+
+```powershell
+python scripts\rq1_import_massive.py   --download   --locale en-US   --output-dir data/rq1_massive   --seed 42   --dedupe-text
+```
+
+Useful filters:
+
+```powershell
+python scripts\rq1_import_massive.py   --download   --output-dir data/rq1_massive_slots   --min-slots 1   --max-words 30   --seed 42
+```
+
+Then run the existing pipeline on the imported data:
+
+```powershell
+python scripts\rq1_run_pipeline.py   --stage all   --data-root data/rq1_massive   --output-dir outputs/rq1_massive   --snrs=-6,-3,0,3,6,9,12   --seed 42
+```
+
+The importer also supports local MASSIVE files:
+
+```powershell
+python scripts\rq1_import_massive.py `
+  --source path\to\amazon-massive-dataset-1.1.tar.gz `
+  --output-dir data/rq1_massive
+```
+
+The evaluation step uses imported metadata for slot candidate matching. For non-template intents, intent accuracy uses a lightweight nearest-original-utterance fallback; this is a practical heuristic, not a replacement for a trained NLU intent classifier.
+
 ## Quick Test
 
 Run the full small pipeline:
 
 ```powershell
-.venv\Scripts\python.exe scripts\rq1_run_pipeline.py --stage all --quick-test
+python scripts\rq1_run_pipeline.py --stage all --quick-test
 ```
 
 Quick test settings:
@@ -48,7 +78,7 @@ Quick test settings:
 ## Full Pipeline
 
 ```powershell
-.venv\Scripts\python.exe scripts\rq1_run_pipeline.py   --stage all   --snrs 0,3,6,9,12,15,18   --output-dir outputs/rq1_task_semantics   --seed 42
+python scripts\rq1_run_pipeline.py   --stage all   --snrs 0,3,6,9,12,15,18   --output-dir outputs/rq1_task_semantics   --seed 42
 ```
 
 Use `--skip-train` when checkpoints already exist and only decode/evaluate/plot stages are needed.
@@ -60,7 +90,7 @@ Use `--skip-train` when checkpoints already exist and only decode/evaluate/plot 
 Generate template data:
 
 ```powershell
-.venv\Scripts\python.exe scripts\rq1_generate_data.py `
+python scripts\rq1_generate_data.py `
   --output-dir data/rq1_task_semantics `
   --train-size 8000 `
   --valid-size 1000 `
@@ -71,7 +101,7 @@ Generate template data:
 Convert to DeepSC format:
 
 ```powershell
-.venv\Scripts\python.exe scripts\rq1_convert_data.py `
+python scripts\rq1_convert_data.py `
   --input-dir data/rq1_task_semantics `
   --output-dir data/rq1_task_semantics/deepsc_format `
   --seed 42
@@ -80,7 +110,7 @@ Convert to DeepSC format:
 Train the full model with MI loss:
 
 ```powershell
-.venv\Scripts\python.exe scripts\rq1_train_deepsc.py `
+python scripts\rq1_train_deepsc.py `
   --data-dir data/rq1_task_semantics/deepsc_format `
   --checkpoint-dir outputs/rq1_task_semantics/checkpoints/full `
   --log-dir outputs/rq1_task_semantics/logs/train_full `
@@ -95,7 +125,7 @@ Train the full model with MI loss:
 Train the no-MI control:
 
 ```powershell
-.venv\Scripts\python.exe scripts\rq1_train_deepsc.py `
+python scripts\rq1_train_deepsc.py `
   --data-dir data/rq1_task_semantics/deepsc_format `
   --checkpoint-dir outputs/rq1_task_semantics/checkpoints/no_mi `
   --log-dir outputs/rq1_task_semantics/logs/train_no_mi `
@@ -110,7 +140,7 @@ Train the no-MI control:
 Decode one method across SNRs:
 
 ```powershell
-.venv\Scripts\python.exe scripts\rq1_decode_snr.py `
+python scripts\rq1_decode_snr.py `
   --data-dir data/rq1_task_semantics/deepsc_format `
   --test-jsonl data/rq1_task_semantics/test.jsonl `
   --checkpoint-dir outputs/rq1_task_semantics/checkpoints/full `
@@ -125,7 +155,7 @@ Decode one method across SNRs:
 Evaluate decoded JSONL files:
 
 ```powershell
-.venv\Scripts\python.exe scripts\rq1_evaluate_task_metrics.py `
+python scripts\rq1_evaluate_task_metrics.py `
   --decoded-dir outputs/rq1_task_semantics/decoded `
   --output-dir outputs/rq1_task_semantics/metrics
 ```
@@ -133,7 +163,7 @@ Evaluate decoded JSONL files:
 Plot figures:
 
 ```powershell
-.venv\Scripts\python.exe scripts\rq1_plot_results.py `
+python scripts\rq1_plot_results.py `
   --summary-csv outputs/rq1_task_semantics/metrics/rq1_summary.csv `
   --output-dir outputs/rq1_task_semantics/figures
 ```

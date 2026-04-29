@@ -8,9 +8,9 @@ import re
 import unicodedata
 from collections import Counter, defaultdict
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Sequence, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
-from deepsc_ext.rq1.common import ensure_dir, read_jsonl
+from deepsc_ext.rq1.common import ensure_dir, read_json, read_jsonl
 from deepsc_ext.rq1.data import candidate_values_by_slot, flat_candidate_values
 
 
@@ -101,12 +101,36 @@ def classify_intent(decoded_text: str) -> str:
     return "unknown"
 
 
-def candidates_for_intent(intent: str) -> List[str]:
+def candidates_for_intent(
+    intent: str,
+    metadata: Optional[Dict[str, Any]] = None,
+    fallback_rows: Optional[Sequence[Dict[str, Any]]] = None,
+) -> List[str]:
     """Return slot candidate values relevant to an intent ontology."""
-    by_slot = candidate_values_by_slot()
+    if metadata and metadata.get("candidate_values_by_slot"):
+        by_slot = metadata["candidate_values_by_slot"]
+    else:
+        by_slot = candidate_values_by_slot()
+
+    if metadata and metadata.get("intent_slot_names"):
+        slot_names = metadata["intent_slot_names"].get(intent, [])
+    elif intent in INTENT_SLOT_NAMES:
+        slot_names = INTENT_SLOT_NAMES[intent]
+    elif fallback_rows:
+        slot_names = sorted(
+            {
+                slot_name.split("__", 1)[0]
+                for row in fallback_rows
+                if row.get("intent") == intent
+                for slot_name in row.get("slots", {}).keys()
+            }
+        )
+    else:
+        slot_names = []
+
     values = []
     seen = set()
-    for slot_name in INTENT_SLOT_NAMES.get(intent, []):
+    for slot_name in slot_names:
         for value in by_slot.get(slot_name, []):
             normalized = normalize_text(value)
             if normalized not in seen:
@@ -130,10 +154,19 @@ def find_candidate_values(text: str, candidates: Iterable[str]) -> List[str]:
     return matches
 
 
-def slot_metrics(decoded_text: str, true_intent: str, slots: Dict[str, str]) -> Tuple[float, float, float]:
+def slot_metrics(
+    decoded_text: str,
+    true_intent: str,
+    slots: Dict[str, str],
+    metadata: Optional[Dict[str, Any]] = None,
+    fallback_rows: Optional[Sequence[Dict[str, Any]]] = None,
+) -> Tuple[float, float, float]:
     """Compute candidate-value slot precision, recall, and F1 for one sample."""
     gold_values = {normalize_text(value) for value in slots.values() if normalize_text(value)}
-    predicted_values = set(find_candidate_values(decoded_text, candidates_for_intent(true_intent)))
+    candidate_values = candidates_for_intent(true_intent, metadata=metadata, fallback_rows=fallback_rows)
+    if not candidate_values:
+        candidate_values = list(slots.values())
+    predicted_values = set(find_candidate_values(decoded_text, candidate_values))
     correct = len(gold_values & predicted_values)
     precision = correct / len(predicted_values) if predicted_values else 0.0
     recall = correct / len(gold_values) if gold_values else 1.0
@@ -144,6 +177,38 @@ def slot_metrics(decoded_text: str, true_intent: str, slots: Dict[str, str]) -> 
 def _metric_tokens(text: str) -> List[str]:
     """Tokenize text for the local corpus BLEU implementation."""
     return normalize_text(text).split()
+
+
+def _token_set(text: str) -> set:
+    """Return normalized token set for nearest-intent fallback."""
+    return set(_metric_tokens(text))
+
+
+def _jaccard(left: set, right: set) -> float:
+    """Compute Jaccard similarity for two token sets."""
+    if not left or not right:
+        return 0.0
+    return len(left & right) / len(left | right)
+
+
+def classify_intent_auto(decoded_text: str, rows_for_group: Sequence[Dict[str, Any]]) -> str:
+    """Classify intent with fixed rules, then nearest original utterance fallback."""
+    predicted = classify_intent(decoded_text)
+    known_intents = {row.get("intent") for row in rows_for_group}
+    if predicted in known_intents:
+        return predicted
+
+    decoded_tokens = _token_set(decoded_text)
+    if not decoded_tokens:
+        return predicted
+    best_intent = "unknown"
+    best_score = 0.0
+    for row in rows_for_group:
+        score = _jaccard(decoded_tokens, _token_set(row.get("original_text", "")))
+        if score > best_score:
+            best_score = score
+            best_intent = row.get("intent", "unknown")
+    return best_intent if best_score > 0 else predicted
 
 
 def _ngram_counts(tokens: Sequence[str], order: int) -> Counter:
@@ -186,12 +251,22 @@ def corpus_bleu(references: Sequence[str], hypotheses: Sequence[str], max_order:
     return float(geo_mean * brevity_penalty)
 
 
-def _case_metrics(row: Dict[str, Any]) -> Dict[str, Any]:
+def _case_metrics(
+    row: Dict[str, Any],
+    rows_for_group: Sequence[Dict[str, Any]],
+    metadata: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
     """Compute all sample-level task metrics for one decoded row."""
     true_intent = row["intent"]
-    pred_intent = classify_intent(row.get("decoded_text", ""))
+    pred_intent = classify_intent_auto(row.get("decoded_text", ""), rows_for_group)
     intent_correct = int(pred_intent == true_intent)
-    precision, recall, f1 = slot_metrics(row.get("decoded_text", ""), true_intent, row.get("slots", {}))
+    precision, recall, f1 = slot_metrics(
+        row.get("decoded_text", ""),
+        true_intent,
+        row.get("slots", {}),
+        metadata=metadata,
+        fallback_rows=rows_for_group,
+    )
     task_success = int(intent_correct == 1 and recall >= 1.0)
     return {
         "id": row.get("id", ""),
@@ -217,14 +292,38 @@ def _mean(rows: Sequence[Dict[str, Any]], field: str) -> float:
     return float(sum(float(row[field]) for row in rows) / len(rows))
 
 
-def evaluate_decoded(decoded_dir: Path, output_dir: Path) -> Tuple[Path, Path]:
+def _metadata_from_rows(rows_by_group: Dict[Tuple[str, str], List[Dict[str, Any]]]) -> Dict[str, Any]:
+    """Derive metric metadata from decoded gold rows when no metadata file is supplied."""
+    candidate_values = defaultdict(set)
+    intent_slot_names = defaultdict(set)
+    for rows in rows_by_group.values():
+        for row in rows:
+            intent = row.get("intent", "unknown")
+            for slot_name, value in row.get("slots", {}).items():
+                base_slot = slot_name.split("__", 1)[0]
+                candidate_values[base_slot].add(value)
+                intent_slot_names[intent].add(base_slot)
+    return {
+        "candidate_values_by_slot": {
+            slot: sorted(values) for slot, values in sorted(candidate_values.items())
+        },
+        "intent_slot_names": {
+            intent: sorted(slots) for intent, slots in sorted(intent_slot_names.items())
+        },
+    }
+
+
+def evaluate_decoded(
+    decoded_dir: Path,
+    output_dir: Path,
+    metadata_json: Optional[Path] = None,
+) -> Tuple[Path, Path]:
     """Evaluate every decoded JSONL file under decoded_dir and write CSV outputs."""
     ensure_dir(output_dir)
     decoded_files = sorted(decoded_dir.glob("**/snr_*.jsonl"))
     if not decoded_files:
         raise FileNotFoundError("No decoded snr_*.jsonl files found under {}".format(decoded_dir))
 
-    case_rows: List[Dict[str, Any]] = []
     grouped: Dict[Tuple[str, str], List[Dict[str, Any]]] = defaultdict(list)
     source_rows: Dict[Tuple[str, str], List[Dict[str, Any]]] = defaultdict(list)
 
@@ -235,7 +334,16 @@ def evaluate_decoded(decoded_dir: Path, output_dir: Path) -> Tuple[Path, Path]:
             row["method"] = method
             key = (method, snr)
             source_rows[key].append(row)
-            case_row = _case_metrics(row)
+
+    if metadata_json and metadata_json.exists():
+        metadata = read_json(metadata_json)
+    else:
+        metadata = _metadata_from_rows(source_rows)
+
+    case_rows: List[Dict[str, Any]] = []
+    for key, raw_rows in source_rows.items():
+        for row in raw_rows:
+            case_row = _case_metrics(row, raw_rows, metadata=metadata)
             case_rows.append(case_row)
             grouped[key].append(case_row)
 
@@ -285,9 +393,10 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Evaluate RQ1 decoded JSONL files.")
     parser.add_argument("--decoded-dir", default="outputs/rq1_task_semantics/decoded", type=Path)
     parser.add_argument("--output-dir", default="outputs/rq1_task_semantics/metrics", type=Path)
+    parser.add_argument("--metadata-json", default=None, type=Path)
     return parser
 
 
 def main(args: argparse.Namespace) -> Tuple[Path, Path]:
     """Run metrics from parsed CLI args."""
-    return evaluate_decoded(args.decoded_dir, args.output_dir)
+    return evaluate_decoded(args.decoded_dir, args.output_dir, metadata_json=args.metadata_json)
