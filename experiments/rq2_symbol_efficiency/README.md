@@ -61,29 +61,35 @@ python scripts/rq2_run_pipeline.py `
 Full symbols x SNR grid:
 
 ```powershell
-python scripts/rq2_run_pipeline.py `
-  --stage all `
-  --mode grid `
-  --symbols-list 1,2,3,4,6,8,10 `
-  --snrs -15,-12,-9,-6,-3,0,3,6,9,12 `
-  --methods full,no_mi `
-  --output-dir outputs/rq2_symbol_efficiency
+python scripts/rq2_run_pipeline.py   --stage all   --mode grid   --symbols-list 1,2,3,4,6,8,10   --snrs -15,-12,-9,-6,-3,0,3,6,9,12   --methods full,no_mi   --output-dir outputs/rq2_symbol_efficiency
 ```
 
 ## Staged Commands
 
-Train one checkpoint:
+Run these in order to match the full grid one-command above.
+
+Train all checkpoints:
 
 ```powershell
-python scripts/rq2_train_deepsc.py `
-  --data-dir data/rq1_massive/deepsc_format `
-  --checkpoint-dir outputs/rq2_symbol_efficiency/checkpoints/no_mi/spw_4 `
-  --method no_mi `
-  --symbols-per-word 4 `
-  --train-snr 6 `
-  --batch-size 64 `
-  --epochs 60 `
-  --seed 42
+$methods = "full","no_mi"
+$symbols = 1,2,3,4,6,8,10
+
+foreach ($method in $methods) {
+  foreach ($spw in $symbols) {
+    python scripts/rq2_train_deepsc.py `
+      --data-dir data/rq1_massive/deepsc_format `
+      --checkpoint-dir "outputs/rq2_symbol_efficiency/checkpoints/$method/spw_$spw" `
+      --log-dir "outputs/rq2_symbol_efficiency/logs/train_${method}_spw_${spw}" `
+      --method $method `
+      --symbols-per-word $spw `
+      --channel AWGN `
+      --train-snr 6 `
+      --batch-size 64 `
+      --epochs 20 `
+      --seed 42 `
+      --max-length 35
+  }
+}
 ```
 
 Decode a grid:
@@ -96,7 +102,13 @@ python scripts/rq2_decode_grid.py `
   --output-dir outputs/rq2_symbol_efficiency/decoded `
   --symbols-list 1,2,3,4,6,8,10 `
   --snrs -15,-12,-9,-6,-3,0,3,6,9,12 `
-  --methods full,no_mi
+  --methods full,no_mi `
+  --mode grid `
+  --fixed-snr 0 `
+  --channel AWGN `
+  --batch-size 256 `
+  --seed 42 `
+  --max-length 35
 ```
 
 Evaluate:
@@ -108,7 +120,8 @@ python scripts/rq2_evaluate_metrics.py `
   --metadata-json data/rq1_massive/deepsc_format/metadata.json `
   --methods full,no_mi `
   --symbols-list 1,2,3,4,6,8,10 `
-  --snrs -15,-12,-9,-6,-3,0,3,6,9,12
+  --snrs -15,-12,-9,-6,-3,0,3,6,9,12 `
+  --fixed-snr 0
 ```
 
 Thresholds:
