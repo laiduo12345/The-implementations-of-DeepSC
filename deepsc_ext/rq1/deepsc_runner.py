@@ -32,6 +32,7 @@ DEFAULT_MODEL_CONFIG = {
     "decoder_dropout": 0.1,
     "max_length": 35,
     "shuffle_size": 2000,
+    "symbols_per_word": 8,
 }
 
 
@@ -59,6 +60,7 @@ def build_deepsc_args(
     test_snr: float = 6.0,
     shuffle_size: int = DEFAULT_MODEL_CONFIG["shuffle_size"],
     max_length: int = DEFAULT_MODEL_CONFIG["max_length"],
+    symbols_per_word: int = DEFAULT_MODEL_CONFIG["symbols_per_word"],
 ) -> SimpleNamespace:
     """Build the args object expected by the original DeepSC model code."""
     vocab = load_vocab(data_dir)
@@ -80,6 +82,7 @@ def build_deepsc_args(
             "start_idx": token_to_idx["<START>"],
             "end_idx": token_to_idx["<END>"],
             "max_length": max_length,
+            "symbols_per_word": symbols_per_word,
         }
     )
     return SimpleNamespace(**values)
@@ -99,9 +102,12 @@ def build_dataset(
     shuffle: bool,
     shuffle_size: int,
     seed: int,
+    max_samples: Optional[int] = None,
 ) -> tf.data.Dataset:
     """Build a deterministic DeepSC dataset from an encoded pickle file."""
     raw_data = load_pickle_sequences(path)
+    if max_samples is not None and max_samples > 0:
+        raw_data = raw_data[:max_samples]
     data_input = tf.keras.preprocessing.sequence.pad_sequences(raw_data, padding="post")
     dataset = tf.data.Dataset.from_tensor_slices((data_input, data_input))
     dataset = dataset.cache()
@@ -154,6 +160,7 @@ def train_deepsc(args: argparse.Namespace, argv: Optional[List[str]] = None) -> 
         train_snr=args.train_snr,
         shuffle_size=args.shuffle_size,
         max_length=args.max_length,
+        symbols_per_word=getattr(args, "symbols_per_word", DEFAULT_MODEL_CONFIG["symbols_per_word"]),
     )
     train_dataset = build_dataset(
         args.data_dir / "train_data.pkl",
@@ -161,6 +168,7 @@ def train_deepsc(args: argparse.Namespace, argv: Optional[List[str]] = None) -> 
         shuffle=True,
         shuffle_size=args.shuffle_size,
         seed=args.seed,
+        max_samples=getattr(args, "max_train_samples", None),
     )
     valid_dataset = build_dataset(
         args.data_dir / "valid_data.pkl",
@@ -168,6 +176,7 @@ def train_deepsc(args: argparse.Namespace, argv: Optional[List[str]] = None) -> 
         shuffle=False,
         shuffle_size=args.shuffle_size,
         seed=args.seed,
+        max_samples=getattr(args, "max_valid_samples", None),
     )
 
     net = Transeiver(model_args)
@@ -279,6 +288,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--mine-learning-rate", default=1e-3, type=float)
     parser.add_argument("--shuffle-size", default=DEFAULT_MODEL_CONFIG["shuffle_size"], type=int)
     parser.add_argument("--max-length", default=DEFAULT_MODEL_CONFIG["max_length"], type=int)
+    parser.add_argument("--symbols-per-word", default=DEFAULT_MODEL_CONFIG["symbols_per_word"], type=int)
+    parser.add_argument("--max-train-samples", default=None, type=int)
+    parser.add_argument("--max-valid-samples", default=None, type=int)
     parser.add_argument("--resume-checkpoint", default=None, type=Path)
     mine_group = parser.add_mutually_exclusive_group()
     mine_group.add_argument("--train-with-mine", dest="train_with_mine", action="store_true")

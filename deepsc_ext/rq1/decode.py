@@ -75,6 +75,7 @@ def decode_snr(args: argparse.Namespace) -> List[Path]:
         channel=args.channel,
         test_snr=args.snrs[0] if args.snrs else 6.0,
         max_length=args.max_length,
+        symbols_per_word=getattr(args, "symbols_per_word", 8),
     )
     vocab = read_json(args.data_dir / "vocab.json")
     net = Transeiver(model_args)
@@ -125,6 +126,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--seed", default=42, type=int)
     parser.add_argument("--method", default="full", type=str)
     parser.add_argument("--max-length", default=35, type=int)
+    parser.add_argument("--symbols-per-word", default=8, type=int)
     return parser
 
 

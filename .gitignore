@@ -2,7 +2,16 @@
 /data/
 /outputs/
 /checkpoint/
+checkpoints/
+logs/
 *.ckpt
+*.h5
+*.pt
+*.pth
+*.pkl
+*.png
+*.pdf
+*.csv
 *.index
 *.data-*
 

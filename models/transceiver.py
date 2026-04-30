@@ -171,6 +171,10 @@ def sample_batch(rec, noise):
 class Transeiver(tf.keras.Model):
     def __init__(self, args):
         super(Transeiver, self).__init__()
+        self.symbols_per_word = int(getattr(args, "symbols_per_word", 8))
+        if self.symbols_per_word <= 0:
+            raise ValueError("symbols_per_word must be a positive integer.")
+        self.channel_symbol_dim = 2 * self.symbols_per_word
 
         # semantic encoder
         self.semantic_encoder = Encoder(args.encoder_num_layer, args.encoder_num_heads,
@@ -183,7 +187,7 @@ class Transeiver(tf.keras.Model):
                                         args.vocab_size, dropout_pro = args.decoder_dropout)
 
         # channel encoder
-        self.channel_encoder = Channel_Encoder(256, 16)
+        self.channel_encoder = Channel_Encoder(256, self.channel_symbol_dim)
         # channel decoder
         self.channel_decoder = Channel_Decoder(args.decoder_d_model, 512)
 

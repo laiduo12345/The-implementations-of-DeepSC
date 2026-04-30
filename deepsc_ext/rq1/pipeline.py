@@ -12,6 +12,7 @@ from deepsc_ext.rq1.common import ensure_dir, parse_snrs, write_json
 
 
 STAGES = ["generate_data", "convert_data", "train", "decode", "evaluate", "plot"]
+TRAIN_MAX_ATTEMPTS = 5
 YELLOW = "\033[33m"
 RED = "\033[31m"
 RESET = "\033[0m"
@@ -55,19 +56,33 @@ def _error(message: str) -> None:
     _log("{}ERROR: {}{}".format(RED, message, RESET))
 
 
-def _run(command: List[str], label: str, tf_log_level: str) -> None:
-    """Run one subprocess command and fail fast on errors."""
-    _log("Running [{}]: {}".format(label, " ".join(command)))
+def _run(command: List[str], label: str, tf_log_level: str, max_attempts: int = 1) -> None:
+    """Run one subprocess command with optional retries."""
     env = os.environ.copy()
     env["TF_CPP_MIN_LOG_LEVEL"] = tf_log_level
-    try:
-        subprocess.run(command, cwd=str(_repo_root()), check=True, env=env)
-    except FileNotFoundError as exc:
-        _error("Step '{}' could not start: {}".format(label, exc))
-        raise SystemExit(1)
-    except subprocess.CalledProcessError as exc:
-        _error("Step '{}' failed with exit code {}.".format(label, exc.returncode))
-        raise SystemExit(exc.returncode)
+    attempt = 1
+    while True:
+        if max_attempts > 1:
+            _log(
+                "Running [{}] (attempt {}/{}): {}".format(
+                    label, attempt, max_attempts, " ".join(command)
+                )
+            )
+        else:
+            _log("Running [{}]: {}".format(label, " ".join(command)))
+        try:
+            subprocess.run(command, cwd=str(_repo_root()), check=True, env=env)
+            return
+        except FileNotFoundError as exc:
+            _error("Step '{}' could not start: {}".format(label, exc))
+            if attempt >= max_attempts:
+                raise SystemExit(1)
+        except subprocess.CalledProcessError as exc:
+            _error("Step '{}' failed with exit code {}.".format(label, exc.returncode))
+            if attempt >= max_attempts:
+                raise SystemExit(exc.returncode)
+        attempt += 1
+        _warning("Retrying step '{}' ({}/{})...".format(label, attempt, max_attempts))
 
 
 def _snrs_arg(args: argparse.Namespace) -> str:
@@ -269,7 +284,8 @@ def _run_steps(steps: List[PipelineStep], show_progress: bool, tf_log_level: str
         return
     if not show_progress:
         for step in steps:
-            _run(step.command, step.label, tf_log_level)
+            max_attempts = TRAIN_MAX_ATTEMPTS if step.label.startswith("train") else 1
+            _run(step.command, step.label, tf_log_level, max_attempts)
         return
     try:
         from tqdm import tqdm  # pylint: disable=import-outside-toplevel
@@ -277,12 +293,14 @@ def _run_steps(steps: List[PipelineStep], show_progress: bool, tf_log_level: str
         with tqdm(total=len(steps), desc="RQ1 pipeline", unit="step") as progress:
             for step in steps:
                 progress.set_postfix_str(step.label)
-                _run(step.command, step.label, tf_log_level)
+                max_attempts = TRAIN_MAX_ATTEMPTS if step.label.startswith("train") else 1
+                _run(step.command, step.label, tf_log_level, max_attempts)
                 progress.update(1)
     except ImportError:
         _warning("tqdm is unavailable; running without a progress bar.")
         for step in steps:
-            _run(step.command, step.label, tf_log_level)
+            max_attempts = TRAIN_MAX_ATTEMPTS if step.label.startswith("train") else 1
+            _run(step.command, step.label, tf_log_level, max_attempts)
 
 
 def run_pipeline(args: argparse.Namespace) -> None:
