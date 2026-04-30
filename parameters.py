@@ -39,6 +39,8 @@ def para_config():
     parser.add_argument('--decoder-d-ff', default=512, type=int, help='The output dimension of ffn')
     parser.add_argument('--decoder-num-heads', default=8, type=int, help='The number heads')
     parser.add_argument('--decoder-dropout', default=0.1, type=float, help='The decoder dropout rate')
+    parser.add_argument('--symbols-per-word', default=8, type=int,
+                        help='Complex channel symbols per input word. Channel encoder output is 2 * this value.')
 
 
     # Other parameter settings

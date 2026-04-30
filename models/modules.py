@@ -153,6 +153,10 @@ class sublayer2(tf.keras.layers.Layer):
         self.d_model = d_model
         self.dff = dff
 
+    def call(self, x):
+        # Preserve the original checkpoint topology: this layer has no trainable FFN state.
+        return x
+
     def point_wise_feed_forward_network(d_model, dff):
         '''
         This is point_wise_feed_forward_network
@@ -182,11 +186,11 @@ class EncoderLayer(tf.keras.layers.Layer):
     def call(self, x, training, mask):
         # attention: the layernorm(x + sublayer(x)) should be replaced by 
         # x + sublayer(LayerNorm(x)) 
-        attn_output, _ = self.sl1(x, x, x, mask) #这个地方有点问题
+        attn_output, _ = self.sl1.call(x, x, x, mask) #这个地方有点问题
         attn_output = self.dropout1(attn_output, training = training)
         output1 = self.layernorm1(x + attn_output)  # (batch_size, input_seq_len, d_model)
         
-        ffn_output = self.sl2(output1)
+        ffn_output = self.sl2.call(output1)
         ffn_output = self.dropout2(ffn_output, training = training)
         output2 = self.layernorm2(output1 + ffn_output) # (batch_size, input_seq_len, d_model)
         
@@ -216,15 +220,15 @@ class DecoderLayer(tf.keras.layers.Layer):
         self.dropout3 = tf.keras.layers.Dropout(drop_pro)
         
     def call(self, x, enc_output, training, look_ahead_mask, padding_mask):
-        attn1, attn_weights1 = self.sl11(x, x, x, look_ahead_mask)
+        attn1, attn_weights1 = self.sl11.call(x, x, x, look_ahead_mask)
         attn1 = self.dropout1(attn1, training = training)
         output1 = self.layernorm1(x + attn1)
         
-        attn2, attn_weights2 = self.sl12(enc_output, enc_output, output1, padding_mask)
+        attn2, attn_weights2 = self.sl12.call(enc_output, enc_output, output1, padding_mask)
         attn2 = self.dropout2(attn2, training = training)
         output2 = self.layernorm2(attn2 + output1)
         
-        ffn_output = self.ffn(output2)
+        ffn_output = self.ffn.call(output2)
         ffn_output = self.dropout3(ffn_output, training = training)
         output3 = self.layernorm3(ffn_output + output2)  # (batch_size, target_seq_len, d_model)
         
@@ -268,7 +272,7 @@ class Encoder(tf.keras.Model):
         
         # Encoder
         for i in range(self.num_layers):
-            x = self.encoder[i](x, training, mask)
+            x = self.encoder[i].call(x, training, mask)
             
         return x
 
@@ -306,7 +310,7 @@ class Decoder(tf.keras.Model):
         x = self.dropout(x, training=training)
 
         for i in range(self.num_layers):
-            x, block1, block2 = self.dec_layers[i](x, enc_output, training,
+            x, block1, block2 = self.dec_layers[i].call(x, enc_output, training,
                                              look_ahead_mask, padding_mask)
       
         attention_weights['decoder_layer{}_block1'.format(i+1)] = block1

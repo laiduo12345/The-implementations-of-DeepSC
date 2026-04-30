@@ -12,4 +12,5 @@ dependencies = [
   "tqdm",
   "nltk",
   "scikit-learn",
+  "matplotlib",
 ]
